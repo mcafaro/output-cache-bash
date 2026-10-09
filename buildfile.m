@@ -12,5 +12,34 @@ plan("test") = TestTask("tests", ...
     TestResults="test-results/results.xml", ...
     CodeCoverageResults="code-coverage/results.xml");
 
+% Tasks used by the cache bash workflows. They are not default tasks.
+plan("probe").Inputs = "source";
+plan("probe").Outputs = "probe-out/probe.txt";
+plan("stamp").Inputs = "source";
+
 plan.DefaultTasks = ["check" "test"];
+end
+
+function probeTask(context)
+% Has inputs and outputs, so it can be skipped only if its outputs exist or are restored from the output cache
+recordRun("probe")
+if getenv("BASH_FAIL") == "true"
+    error("bash:InjectedFailure","Injected failure for cache bashing.")
+end
+out = context.Task.Outputs.paths;
+[~] = mkdir(fileparts(out));
+writelines(string(datetime("now")),out)
+end
+
+function stampTask(~)
+% Has inputs but no outputs, so a restored .buildtool trace alone is enough to skip it
+recordRun("stamp")
+end
+
+function recordRun(name)
+% Appends the task name to BASH_RUN_LOG so workflows can tell whether the task action executed
+log = getenv("BASH_RUN_LOG");
+if log ~= ""
+    writelines(name,log,WriteMode="append")
+end
 end

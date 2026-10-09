@@ -1,0 +1,27 @@
+# Shares job id "collide" with bash-collide-a.yml. The cache key includes the job id but not
+# the workflow, so the two workflows may share a cache. Run A, then B.
+name: Bash - Collide B
+
+on: workflow_dispatch
+
+jobs:
+  collide:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up MATLAB
+        uses: matlab-actions/setup-matlab@v3
+
+      - name: Run build
+        uses: matlab-actions/run-build@v3
+        env:
+            BASH_RUN_LOG: ${{ runner.temp }}/run.log
+        with:
+            tasks: stamp
+            build-options: -outputCache
+            cache: true
+
+      # B has never run, so with per-workflow isolation stamp must run. Skipped means B restored A's cache.
+      - name: Check stamp
+        run: .github/scripts/expect-run.sh "${{ runner.temp }}/run.log" stamp ran

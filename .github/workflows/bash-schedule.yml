@@ -1,0 +1,23 @@
+# Scheduled runs on the default branch should save the cache. Disable this workflow when done.
+name: Bash - Scheduled
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+jobs:
+  scheduled:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up MATLAB
+        uses: matlab-actions/setup-matlab@v3
+
+      - name: Run build
+        uses: matlab-actions/run-build@v3
+        with:
+            tasks: stamp
+            build-options: -outputCache
+            cache: true

@@ -1,0 +1,35 @@
+# Caching when the build runs from a subfolder via -sd. Run twice; the second run should skip probe.
+name: Bash - Subfolder Startup
+
+on:
+  workflow_dispatch:
+    inputs:
+      expect:
+        type: choice
+        options: [any, ran, skipped]
+        default: any
+
+jobs:
+  subfolder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up MATLAB
+        uses: matlab-actions/setup-matlab@v3
+
+      - name: Run build
+        uses: matlab-actions/run-build@v3
+        env:
+            BASH_RUN_LOG: ${{ runner.temp }}/run.log
+        with:
+            tasks: probe
+            build-options: -outputCache
+            startup-options: -sd bash/subproj
+            cache: true
+
+      - name: Show where .buildtool landed
+        run: ls -d .buildtool bash/subproj/.buildtool || true
+
+      - name: Check probe
+        run: .github/scripts/expect-run.sh "${{ runner.temp }}/run.log" probe "${{ inputs.expect }}"

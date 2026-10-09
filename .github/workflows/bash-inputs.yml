@@ -1,0 +1,41 @@
+# Input validation and release compatibility. Each entry checks the build step's outcome.
+name: Bash - Inputs and Releases
+
+on: workflow_dispatch
+
+jobs:
+  inputs:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: cache-yes, release: latest, cache: "yes", options: "", expect: failure }
+          - { name: cache-TRUE, release: latest, cache: "TRUE", options: "", expect: success }
+          - { name: cache-False, release: latest, cache: "False", options: "", expect: success }
+          - { name: cache-empty, release: latest, cache: "", options: "", expect: success }
+          - { name: outputCache-R2026a, release: R2026a, cache: "true", options: -outputCache, expect: failure }
+          - { name: incremental-R2023b, release: R2023b, cache: "true", options: "", expect: success }
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up MATLAB
+        uses: matlab-actions/setup-matlab@v3
+        with:
+            release: ${{ matrix.release }}
+
+      - name: Run build
+        id: build
+        continue-on-error: true
+        uses: matlab-actions/run-build@v3
+        with:
+            tasks: stamp
+            build-options: ${{ matrix.options }}
+            cache: ${{ matrix.cache }}
+
+      - name: Check outcome
+        if: steps.build.outcome != matrix.expect
+        run: |
+            echo "::error::Expected ${{ matrix.expect }} but build step was ${{ steps.build.outcome }}"
+            exit 1

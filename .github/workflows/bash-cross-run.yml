@@ -1,0 +1,69 @@
+# Exercises the cache across workflow runs on fresh runners. Driven by bash/drive.sh.
+name: Bash - Cross-Run Cache
+
+on:
+  workflow_dispatch:
+    inputs:
+      expect:
+        description: Expected result for cache-dependent tasks
+        type: choice
+        options: [any, ran, skipped]
+        default: any
+      release:
+        description: MATLAB release
+        default: latest
+      fail-build:
+        description: Make the probe task error
+        type: boolean
+        default: false
+      fail-after-build:
+        description: Fail a step after a successful build
+        type: boolean
+        default: false
+
+jobs:
+  cross-run:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        variant: [output-cache, incremental]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up MATLAB
+        uses: matlab-actions/setup-matlab@v3
+        with:
+            release: ${{ inputs.release }}
+
+      - name: Run build
+        uses: matlab-actions/run-build@v3
+        env:
+            BASH_RUN_LOG: ${{ runner.temp }}/run.log
+            BASH_FAIL: ${{ inputs.fail-build }}
+        with:
+            tasks: probe stamp
+            build-options: ${{ matrix.variant == 'output-cache' && '-outputCache' || '' }}
+            cache: true
+
+      # On a fresh runner probe's output is missing, so without -outputCache it must always rerun.
+      - name: Check which tasks ran
+        shell: bash
+        run: |
+            echo "| Task | Expected | Actual |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| --- | --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+            log="${{ runner.temp }}/run.log"
+            probe_expect="${{ inputs.expect }}"
+            if [ "${{ matrix.variant }}" = incremental ] && [ "$probe_expect" != any ]; then probe_expect=ran; fi
+            .github/scripts/expect-run.sh "$log" probe "$probe_expect"
+            .github/scripts/expect-run.sh "$log" stamp "${{ inputs.expect }}"
+            test -f probe-out/probe.txt || { echo "::error::probe output missing after build"; exit 1; }
+
+      - name: Show cached folder
+        shell: bash
+        run: du -sh .buildtool && find .buildtool -maxdepth 2 | head -50
+
+      - name: Fail after build
+        if: inputs.fail-after-build
+        run: exit 1

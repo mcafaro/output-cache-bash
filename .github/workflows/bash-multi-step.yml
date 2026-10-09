@@ -1,0 +1,46 @@
+# Two cache-enabled build steps in one job. The second step's restore must not clobber the
+# fresher .buildtool written by the first step. Meaningful from the second run onward.
+name: Bash - Multiple Cached Steps
+
+on: workflow_dispatch
+
+jobs:
+  multi-step:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up MATLAB
+        uses: matlab-actions/setup-matlab@v3
+
+      - name: Change source so any previously cached trace is stale
+        run: echo "% run ${{ github.run_id }}-${{ github.run_attempt }}" >> source/dayofyear.m
+
+      - name: Run build 1
+        uses: matlab-actions/run-build@v3
+        env:
+            BASH_RUN_LOG: ${{ runner.temp }}/run-1.log
+        with:
+            tasks: probe stamp
+            build-options: -outputCache
+            cache: true
+
+      - name: Check build 1
+        run: |
+            .github/scripts/expect-run.sh "${{ runner.temp }}/run-1.log" probe ran
+            .github/scripts/expect-run.sh "${{ runner.temp }}/run-1.log" stamp ran
+
+      - name: Run build 2
+        uses: matlab-actions/run-build@v3
+        env:
+            BASH_RUN_LOG: ${{ runner.temp }}/run-2.log
+        with:
+            tasks: probe stamp
+            build-options: -outputCache
+            cache: true
+
+      # Fails if build 2's restore overwrote build 1's trace with the older cached one.
+      - name: Check build 2
+        run: |
+            .github/scripts/expect-run.sh "${{ runner.temp }}/run-2.log" probe skipped
+            .github/scripts/expect-run.sh "${{ runner.temp }}/run-2.log" stamp skipped
