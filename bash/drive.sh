@@ -32,7 +32,11 @@ scenario() {
     else record "$name" "FAIL: expected $want, got $CONCLUSION (run $RUN_ID)"; fi
 }
 
-count_keys() { gh cache list -R "$REPO" -L 100 --key "$1" --json key -q 'length'; }
+# Counts cache keys containing $1 and, optionally, ending with SHA $2.
+count_keys() {
+    gh cache list -R "$REPO" -L 100 --json key \
+        -q "[.[] | select((.key | contains(\"$1\")) and (.key | endswith(\"${2:-}\")))] | length"
+}
 
 check_keys() {
     local name=$1 prefix=$2 want=$3 got
@@ -51,17 +55,17 @@ gh cache delete --all -R "$REPO" --succeed-on-no-caches
 
 # 1. Cold cache: everything runs and each of the 6 matrix entries saves a key for this SHA.
 scenario "cold cache runs tasks" success bash-cross-run.yml main -f expect=ran
-check_keys "cold run saves 6 keys" "matlab-buildtool-" 6
-check_keys "one key per Linux matrix entry" "matlab-buildtool-Linux-cross-run-" 2
+check_keys "cold run saves 6 keys" "-cross-run-" 6
+check_keys "one key per Linux matrix entry" "Linux-cross-run-" 2
 
 # 2. Same SHA: exact key hit, tasks skipped, nothing new saved.
 scenario "exact key hit skips tasks" success bash-cross-run.yml main -f expect=skipped
-check_keys "exact hit does not save again" "matlab-buildtool-" 6
+check_keys "exact hit does not save again" "-cross-run-" 6
 
 # 3. New commit, no source change: restore-key fallback, tasks skipped, new keys saved.
 new_commit "no-op commit for restore-key fallback" > /dev/null
 scenario "restore-key fallback skips tasks" success bash-cross-run.yml main -f expect=skipped
-check_keys "new SHA saves new keys" "matlab-buildtool-" 12
+check_keys "new SHA saves new keys" "-cross-run-" 12
 
 # 4. Source change must invalidate: no stale outputs.
 echo "% bash $(date +%s)" >> source/dayofyear.m
@@ -75,19 +79,19 @@ scenario "revert source (report only, see summaries)" success bash-cross-run.yml
 # 6. Failed build must not save.
 sha=$(new_commit "failing build")
 scenario "failing build fails" failure bash-cross-run.yml main -f fail-build=true
-n=$(gh cache list -R "$REPO" -L 100 --json key -q "[.[] | select(.key | endswith(\"$sha\"))] | length")
+n=$(count_keys -cross-run- "$sha")
 [ "$n" = 0 ] && record "no key for failed SHA" PASS || record "no key for failed SHA" "FAIL: $n keys saved"
 
 # 7. Build passes but a later step fails. Docs say "saves only if the build succeeds"; post-if: success() checks the job.
 sha=$(new_commit "fail after build")
 dispatch bash-cross-run.yml main -f fail-after-build=true
-n=$(gh cache list -R "$REPO" -L 100 --json key -q "[.[] | select(.key | endswith(\"$sha\"))] | length")
+n=$(count_keys -cross-run- "$sha")
 record "build ok + later step fails (report only)" "$n keys saved for $sha (docs imply 6)"
 
 # 8. Non-default branch restores from main but never saves.
 git checkout -q -B "$BRANCH" && sha=$(new_commit "feature branch")
 scenario "branch restores main cache" success bash-cross-run.yml "$BRANCH" -f expect=skipped
-n=$(gh cache list -R "$REPO" -L 100 --json key -q "[.[] | select(.key | endswith(\"$sha\"))] | length")
+n=$(count_keys -cross-run- "$sha")
 [ "$n" = 0 ] && record "branch does not save" PASS || record "branch does not save" "FAIL: $n keys saved"
 git checkout -q main && git push -q origin --delete "$BRANCH" && git branch -qD "$BRANCH"
 
@@ -99,7 +103,7 @@ record "multi-step save warnings (report only)" "$warns 'Failed to save the cach
 
 # 10. -sd startup option.
 dispatch bash-subfolder.yml main
-check_keys "subfolder build saves cache" "matlab-buildtool-Linux-subfolder-" 1
+check_keys "subfolder build saves cache" "-subfolder-" 1
 scenario "subfolder build skips on rerun" success bash-subfolder.yml main -f expect=skipped
 
 # 11. Cross-workflow isolation.
