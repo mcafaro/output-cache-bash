@@ -13,7 +13,7 @@ on:
         description: MATLAB release
         default: latest
       fail-build:
-        description: Make the probe task error
+        description: Add a task that always errors
         type: boolean
         default: false
       fail-after-build:
@@ -42,9 +42,8 @@ jobs:
         uses: matlab-actions/run-build@v3
         env:
             BASH_RUN_LOG: ${{ runner.temp }}/run.log
-            BASH_FAIL: ${{ inputs.fail-build }}
         with:
-            tasks: probe stamp
+            tasks: ${{ inputs.fail-build && 'probe stamp fail' || 'probe stamp' }}
             build-options: ${{ matrix.variant == 'output-cache' && '-outputCache' || '' }}
             cache: true
 

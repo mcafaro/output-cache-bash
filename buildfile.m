@@ -23,9 +23,6 @@ end
 function probeTask(context)
 % Has inputs and outputs, so it can be skipped only if its outputs exist or are restored from the output cache
 recordRun("probe")
-if getenv("BASH_FAIL") == "true"
-    error("bash:InjectedFailure","Injected failure for cache bashing.")
-end
 out = context.Task.Outputs.paths;
 [~] = mkdir(fileparts(out));
 writelines(string(datetime("now")),out)
@@ -34,6 +31,11 @@ end
 function stampTask(~)
 % Has inputs but no outputs, so a restored .buildtool trace alone is enough to skip it
 recordRun("stamp")
+end
+
+function failTask(~)
+% Has no inputs or outputs, so it always runs; used to inject a build failure
+error("bash:InjectedFailure","Injected failure for cache bashing.")
 end
 
 function recordRun(name)
