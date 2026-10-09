@@ -52,3 +52,4 @@ doy = sum(daysPerMonth(1:d.Month-1)) + d.Day;
 
 end
 % bash 1791557930
+% bash 1791559103
