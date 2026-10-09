@@ -23,6 +23,7 @@ jobs:
       - name: Set up MATLAB
         uses: matlab-actions/setup-matlab@v3
         with:
+            cache: true
             release: ${{ matrix.release }}
 
       - name: Run build

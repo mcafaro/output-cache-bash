@@ -35,6 +35,7 @@ jobs:
       - name: Set up MATLAB
         uses: matlab-actions/setup-matlab@v3
         with:
+            cache: true
             release: ${{ inputs.release }}
 
       - name: Run build
